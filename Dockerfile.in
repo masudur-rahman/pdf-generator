@@ -1,0 +1,63 @@
+
+###################################
+#Build stage
+FROM golang:1.16-alpine3.13 AS build-env
+
+ARG GITEA_VERSION
+ARG TAGS="sqlite sqlite_unlock_notify"
+ENV TAGS "bindata $TAGS"
+
+#Build deps
+RUN apk --no-cache add build-base git
+
+# Install wkhtmltopdf
+RUN apk update
+RUN apk add --no-cache wkhtmltopdf-dev wkhtmltopdf
+
+#Setup repo
+COPY . ${GOPATH}/src/github.com/masudur-rahman/pdf-generator
+WORKDIR ${GOPATH}/src/github.com/masudur-rahman/pdf-generator
+
+#Checkout version if set
+RUN if [ -n "${GITEA_VERSION}" ]; then git checkout "${GITEA_VERSION}"; fi \
+ && CGO_ENABLED=1 GOOS=linux go build -o pdf-generator .
+
+FROM alpine:3.13
+LABEL maintainer="maintainers@gitea.io"
+
+EXPOSE 22 3000
+
+RUN apk --no-cache add \
+    bash \
+    ca-certificates \
+    curl \
+    gettext \
+    git \
+    linux-pam \
+    openssh \
+    s6 \
+    sqlite \
+    su-exec \
+    tzdata
+
+RUN addgroup \
+    -S -g 1000 \
+    git && \
+  adduser \
+    -S -H -D \
+    -h /data/git \
+    -s /bin/bash \
+    -u 1000 \
+    -G git \
+    git && \
+  echo "git:$(dd if=/dev/urandom bs=24 count=1 status=none | base64)" | chpasswd
+
+# Install wkhtmltopdf
+RUN apk update
+RUN apk add --no-cache wkhtmltopdf-dev wkhtmltopdf
+
+COPY --from=build-env /go/src/github.com/masudur-rahman/pdf-generator/pdf-generator /app/pdf-generator/pdf-generator
+COPY --from=build-env /go/src/github.com/masudur-rahman/pdf-generator/templates/simple.html /templates/simple.html
+
+RUN export XDG_RUNTIME_DIR=/tmp
+ENTRYPOINT ["/app/pdf-generator/pdf-generator"]
