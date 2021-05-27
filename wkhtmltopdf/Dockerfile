@@ -22,6 +22,7 @@ RUN rm wkhtmltox_0.12.6-1.buster_amd64.deb
 #Setup repo
 COPY . ${GOPATH}/src/github.com/masudur-rahman/pdf-generator
 WORKDIR ${GOPATH}/src/github.com/masudur-rahman/pdf-generator
+RUN go mod init && go mod tidy && go mod vendor
 
 #RUN export XDG_RUNTIME_DIR=/tmp
 
